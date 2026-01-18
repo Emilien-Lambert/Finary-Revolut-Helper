@@ -1,0 +1,23 @@
+{
+  "name": "finary-revolut-bridge",
+  "version": "1.0.0",
+  "description": "Calculate average purchase price of Revolut stocks/ETFs for Finary import",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "author": "Emilien-Lambert",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Emilien-Lambert/finary-revolut-bridge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Emilien-Lambert/finary-revolut-bridge/issues"
+  },
+  "homepage": "https://github.com/Emilien-Lambert/finary-revolut-bridge#readme",
+  "dependencies": {
+    "dotenv": "^17.0.0"
+  }
+}
