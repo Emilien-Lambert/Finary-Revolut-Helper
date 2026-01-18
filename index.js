@@ -38,13 +38,46 @@ const parseCSV = (csvPath) => {
 			row[header[columnIndex]] = values[columnIndex];
 		}
 
-		// Only keep buy transactions with a ticker
-		if (row.Ticker && row.Type && row.Type.includes('BUY')) {
+		const type = row.Type || '';
+		const totalAmount = parseFloat((row['Total Amount'] || '0').replace('€', '').replace('EUR ', ''));
+
+		// Keep BUY and SELL transactions with a ticker
+		// TODO: Vérifier si le type exact pour les ventes est bien 'SELL' dans le CSV Revolut
+		if (row.Ticker && (type.includes('BUY') || type.includes('SELL'))) {
 			transactions.push({
 				ticker: row.Ticker,
+				type: type.includes('BUY') ? 'BUY' : 'SELL',
 				quantity: parseFloat(row.Quantity),
 				pricePerShare: parseFloat(row['Price per share'].replace('€', '').replace('EUR ', '')),
-				totalAmount: parseFloat(row['Total Amount'].replace('€', '').replace('EUR ', ''))
+				totalAmount: totalAmount
+			});
+		}
+
+		// Track dividends
+		if (type === 'DIVIDEND') {
+			transactions.push({
+				type: 'DIVIDEND',
+				ticker: row.Ticker || null,
+				totalAmount: totalAmount
+			});
+		}
+
+		// Track robo management fees
+		if (type === 'ROBO MANAGEMENT FEE') {
+			transactions.push({
+				type: 'FEE',
+				totalAmount: totalAmount
+			});
+		}
+
+		// Track cash top-ups
+		if (type === 'CASH TOP-UP') {
+			transactions.push({
+				ticker: 'EUR',
+				type: 'BUY',
+				quantity: totalAmount,
+				pricePerShare: 1,
+				totalAmount: totalAmount
 			});
 		}
 	}
@@ -54,19 +87,46 @@ const parseCSV = (csvPath) => {
 
 const calculateAveragePrices = (transactions) => {
 	const tickerStats = {};
+	let totalInjected = 0;
+	let totalSold = 0;
+	let totalDividends = 0;
+	let totalFees = 0;
 
 	for (const transaction of transactions) {
-		const { ticker } = transaction;
+		const { ticker, type } = transaction;
+
+		// Handle Cash Top-ups (BUY EUR)
+		if (ticker === 'EUR' && type === 'BUY') {
+			// We consider Cash Top-up as the "Injected" capital into the platform
+			totalInjected += transaction.totalAmount;
+			continue;
+		}
+
+		if (type === 'DIVIDEND') {
+			totalDividends += transaction.totalAmount;
+			continue;
+		}
+
+		if (type === 'FEE') {
+			totalFees += Math.abs(transaction.totalAmount);
+			continue;
+		}
 
 		if (!tickerStats[ticker]) {
 			tickerStats[ticker] = {
-				totalQuantity: 0,
-				totalAmount: 0
+				boughtQuantity: 0,
+				soldQuantity: 0,
+				totalBoughtAmount: 0
 			};
 		}
 
-		tickerStats[ticker].totalQuantity += transaction.quantity;
-		tickerStats[ticker].totalAmount += transaction.totalAmount;
+		if (type === 'BUY') {
+			tickerStats[ticker].boughtQuantity += transaction.quantity;
+			tickerStats[ticker].totalBoughtAmount += transaction.totalAmount;
+		} else if (type === 'SELL') {
+			tickerStats[ticker].soldQuantity += transaction.quantity;
+			totalSold += transaction.totalAmount;
+		}
 	}
 
 	// Calculate average price for each ticker and return complete stats
@@ -74,13 +134,18 @@ const calculateAveragePrices = (transactions) => {
 
 	for (const ticker in tickerStats) {
 		const stats = tickerStats[ticker];
-		result[ticker] = {
-			averagePrice: stats.totalAmount / stats.totalQuantity,
-			totalQuantity: stats.totalQuantity
-		};
+		const currentQuantity = stats.boughtQuantity - stats.soldQuantity;
+
+		// Only include tickers with remaining positions
+		if (currentQuantity > 0) {
+			result[ticker] = {
+				averagePrice: stats.totalBoughtAmount / stats.boughtQuantity,
+				totalQuantity: currentQuantity
+			};
+		}
 	}
 
-	return result;
+	return { positions: result, totalInjected, totalSold, totalDividends, totalFees };
 };
 
 const main = () => {
@@ -107,10 +172,10 @@ const main = () => {
 
 	try {
 		const transactions = parseCSV(csvPath);
-		const results = calculateAveragePrices(transactions);
+		const { positions, totalInjected, totalSold, totalDividends, totalFees } = calculateAveragePrices(transactions);
 
 		// Check that all tickers have a corresponding ISIN
-		const missingTickers = Object.keys(results).filter(ticker => !tickerToIsin[ticker]);
+		const missingTickers = Object.keys(positions).filter(ticker => !tickerToIsin[ticker]);
 
 		if (missingTickers.length > 0) {
 			console.error('Missing ISIN mappings in .env file:');
@@ -121,12 +186,23 @@ const main = () => {
 		console.log('Average purchase prices:');
 		console.log('========================');
 
-		for (const ticker in results) {
+		for (const ticker in positions) {
 			const isin = tickerToIsin[ticker];
-			const avgPrice = results[ticker].averagePrice.toFixed(2);
-			const totalQuantity = results[ticker].totalQuantity.toFixed(8);
+			const avgPrice = positions[ticker].averagePrice.toFixed(2);
+			const totalQuantity = positions[ticker].totalQuantity.toFixed(8);
 			console.log(`${isin} - ${totalQuantity} - ${avgPrice} EUR`);
 		}
+
+		const netContributions = totalInjected - totalSold;
+
+		console.log('');
+		console.log('Summary:');
+		console.log('========');
+		console.log(`Total invested:      ${totalInjected.toFixed(2)} EUR`);
+		console.log(`Total sold:          ${totalSold.toFixed(2)} EUR`);
+		console.log(`Net contributions:   ${netContributions.toFixed(2)} EUR`);
+		console.log(`Total dividends:     ${totalDividends.toFixed(2)} EUR`);
+		console.log(`Total fees:          ${totalFees.toFixed(2)} EUR`);
 
 	} catch (error) {
 		console.error('Error during processing:', error.message);
