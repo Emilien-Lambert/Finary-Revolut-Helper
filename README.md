@@ -6,6 +6,10 @@ Calculate the average purchase price of your Revolut stocks and ETFs for easy im
 
 Finary does not offer native integration with Revolut. To manually add your positions, you need to know the **average purchase price** and **total quantity** of each asset. This script automates that calculation.
 
+## Requirements
+
+- [Node.js](https://nodejs.org) (v18 or higher)
+
 ## Installation
 
 ```bash
