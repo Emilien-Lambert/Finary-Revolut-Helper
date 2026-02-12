@@ -41,12 +41,11 @@ const parseCSV = (csvPath) => {
 		const type = row.Type || '';
 		const totalAmount = parseFloat((row['Total Amount'] || '0').replace('€', '').replace('EUR ', ''));
 
-		// Keep BUY and SELL transactions with a ticker
-		// TODO: Vérifier si le type exact pour les ventes est bien 'SELL' dans le CSV Revolut
-		if (row.Ticker && (type.includes('BUY') || type.includes('SELL'))) {
+		// Keep BUY transactions with a ticker
+		if (row.Ticker && type.includes('BUY')) {
 			transactions.push({
 				ticker: row.Ticker,
-				type: type.includes('BUY') ? 'BUY' : 'SELL',
+				type: 'BUY',
 				quantity: parseFloat(row.Quantity),
 				pricePerShare: parseFloat(row['Price per share'].replace('€', '').replace('EUR ', '')),
 				totalAmount: totalAmount
@@ -78,6 +77,14 @@ const parseCSV = (csvPath) => {
 				quantity: totalAmount,
 				pricePerShare: 1,
 				totalAmount: totalAmount
+			});
+		}
+
+		// Track cash withdrawals (selling back to EUR)
+		if (type === 'CASH WITHDRAWAL' && !row.Ticker) {
+			transactions.push({
+				type: 'CASH_WITHDRAWAL',
+				totalAmount: Math.abs(totalAmount)
 			});
 		}
 	}
@@ -112,10 +119,14 @@ const calculateAveragePrices = (transactions) => {
 			continue;
 		}
 
-		if (!tickerStats[ticker]) {
+		if (type === 'CASH_WITHDRAWAL') {
+			totalSold += transaction.totalAmount;
+			continue;
+		}
+
+			if (!tickerStats[ticker]) {
 			tickerStats[ticker] = {
 				boughtQuantity: 0,
-				soldQuantity: 0,
 				totalBoughtAmount: 0
 			};
 		}
@@ -123,9 +134,6 @@ const calculateAveragePrices = (transactions) => {
 		if (type === 'BUY') {
 			tickerStats[ticker].boughtQuantity += transaction.quantity;
 			tickerStats[ticker].totalBoughtAmount += transaction.totalAmount;
-		} else if (type === 'SELL') {
-			tickerStats[ticker].soldQuantity += transaction.quantity;
-			totalSold += transaction.totalAmount;
 		}
 	}
 
@@ -134,7 +142,7 @@ const calculateAveragePrices = (transactions) => {
 
 	for (const ticker in tickerStats) {
 		const stats = tickerStats[ticker];
-		const currentQuantity = stats.boughtQuantity - stats.soldQuantity;
+		const currentQuantity = stats.boughtQuantity;
 
 		// Only include tickers with remaining positions
 		if (currentQuantity > 0) {
