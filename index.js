@@ -163,7 +163,7 @@ const calculateAveragePrices = (transactions) => {
 		const currentQuantity = stats.boughtQuantity;
 
 		// Only include tickers with remaining positions
-		if (currentQuantity > 0.000001) {
+		if (currentQuantity >= 0) {
 			result[ticker] = {
 				averagePrice: stats.totalBoughtAmount / stats.boughtQuantity,
 				totalQuantity: currentQuantity
