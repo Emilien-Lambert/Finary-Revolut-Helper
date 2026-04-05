@@ -80,6 +80,17 @@ const parseCSV = (csvPath) => {
 			});
 		}
 
+		// Track SELL - MARKET (robot rebalancing, money stays in envelope)
+		if (row.Ticker && type.includes('SELL')) {
+			transactions.push({
+				ticker: row.Ticker,
+				type: 'SELL',
+				quantity: parseFloat(row.Quantity),
+				pricePerShare: parseFloat(row['Price per share'].replace('€', '').replace('EUR ', '')),
+				totalAmount: Math.abs(totalAmount)
+			});
+		}
+
 		// Track cash withdrawals (selling back to EUR)
 		if (type === 'CASH WITHDRAWAL' && !row.Ticker) {
 			transactions.push({
@@ -135,6 +146,13 @@ const calculateAveragePrices = (transactions) => {
 			tickerStats[ticker].boughtQuantity += transaction.quantity;
 			tickerStats[ticker].totalBoughtAmount += transaction.totalAmount;
 		}
+
+		if (type === 'SELL') {
+			// Subtract proportional cost to maintain average price
+			const avgPrice = tickerStats[ticker].totalBoughtAmount / tickerStats[ticker].boughtQuantity;
+			tickerStats[ticker].boughtQuantity -= transaction.quantity;
+			tickerStats[ticker].totalBoughtAmount -= transaction.quantity * avgPrice;
+		}
 	}
 
 	// Calculate average price for each ticker and return complete stats
@@ -145,7 +163,7 @@ const calculateAveragePrices = (transactions) => {
 		const currentQuantity = stats.boughtQuantity;
 
 		// Only include tickers with remaining positions
-		if (currentQuantity > 0) {
+		if (currentQuantity > 0.000001) {
 			result[ticker] = {
 				averagePrice: stats.totalBoughtAmount / stats.boughtQuantity,
 				totalQuantity: currentQuantity
