@@ -214,6 +214,30 @@ const main = () => {
 			process.exit(1);
 		}
 
+		const netContributions = totalInjected - totalSold;
+
+		// Machine-readable output for the finary-sync skill. Same data as the
+		// human report below, but structured so it can be consumed reliably.
+		if (process.argv.includes('--json')) {
+			const output = {
+				positions: Object.keys(positions).map(ticker => ({
+					isin: tickerToIsin[ticker],
+					quantity: Number(positions[ticker].totalQuantity.toFixed(8)),
+					avgPrice: Number(positions[ticker].averagePrice.toFixed(2))
+				})),
+				soldOut: soldOut.map(ticker => tickerToIsin[ticker]),
+				summary: {
+					totalInvested: Number(totalInjected.toFixed(2)),
+					totalSold: Number(totalSold.toFixed(2)),
+					netContributions: Number(netContributions.toFixed(2)),
+					totalDividends: Number(totalDividends.toFixed(2)),
+					totalFees: Number(totalFees.toFixed(2))
+				}
+			};
+			console.log(JSON.stringify(output, null, 2));
+			return;
+		}
+
 		console.log('Average purchase prices:');
 		console.log('========================');
 
@@ -232,8 +256,6 @@ const main = () => {
 				console.log(`${tickerToIsin[ticker]} - 0.00000000 - SOLD`);
 			}
 		}
-
-		const netContributions = totalInjected - totalSold;
 
 		console.log('');
 		console.log('Summary:');

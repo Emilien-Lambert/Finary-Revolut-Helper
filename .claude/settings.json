@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node index.js)",
+      "Bash(node index.js --json)",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools"
+    ]
+  }
+}
