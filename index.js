@@ -157,21 +157,26 @@ const calculateAveragePrices = (transactions) => {
 
 	// Calculate average price for each ticker and return complete stats
 	const result = {};
+	const soldOut = [];
 
 	for (const ticker in tickerStats) {
 		const stats = tickerStats[ticker];
 		const currentQuantity = stats.boughtQuantity;
 
-		// Only include tickers with remaining positions
-		if (currentQuantity >= 0) {
+		// A fully-sold ticker leaves a near-zero quantity (floating-point residue).
+		// Keep it aside so it can be flagged as "set to 0 in Finary" instead of
+		// producing a NaN / garbage average price (x / ~0).
+		if (currentQuantity > 0.00000001) {
 			result[ticker] = {
 				averagePrice: stats.totalBoughtAmount / stats.boughtQuantity,
 				totalQuantity: currentQuantity
 			};
+		} else {
+			soldOut.push(ticker);
 		}
 	}
 
-	return { positions: result, totalInjected, totalSold, totalDividends, totalFees };
+	return { positions: result, soldOut, totalInjected, totalSold, totalDividends, totalFees };
 };
 
 const main = () => {
@@ -198,10 +203,10 @@ const main = () => {
 
 	try {
 		const transactions = parseCSV(csvPath);
-		const { positions, totalInjected, totalSold, totalDividends, totalFees } = calculateAveragePrices(transactions);
+		const { positions, soldOut, totalInjected, totalSold, totalDividends, totalFees } = calculateAveragePrices(transactions);
 
 		// Check that all tickers have a corresponding ISIN
-		const missingTickers = Object.keys(positions).filter(ticker => !tickerToIsin[ticker]);
+		const missingTickers = [...Object.keys(positions), ...soldOut].filter(ticker => !tickerToIsin[ticker]);
 
 		if (missingTickers.length > 0) {
 			console.error('Missing ISIN mappings in .env file:');
@@ -217,6 +222,15 @@ const main = () => {
 			const avgPrice = positions[ticker].averagePrice.toFixed(2);
 			const totalQuantity = positions[ticker].totalQuantity.toFixed(8);
 			console.log(`${isin} - ${totalQuantity} - ${avgPrice} EUR`);
+		}
+
+		if (soldOut.length > 0) {
+			console.log('');
+			console.log('Fully sold (set to 0 in Finary):');
+			console.log('================================');
+			for (const ticker of soldOut) {
+				console.log(`${tickerToIsin[ticker]} - 0.00000000 - SOLD`);
+			}
 		}
 
 		const netContributions = totalInjected - totalSold;
