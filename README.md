@@ -81,6 +81,7 @@ Total sold:          10.00 EUR
 Net contributions:   6934.10 EUR
 Total dividends:     38.63 EUR
 Total fees:          36.99 EUR
+Cash value:          144.69 EUR
 ```
 
 JSON output (used by the `finary-sync` skill) is available with:
@@ -88,6 +89,9 @@ JSON output (used by the `finary-sync` skill) is available with:
 ```bash
 node index.js --json
 ```
+
+> 💶 **`Cash value` is not pushed to Finary:** Finary doesn't allow a plain EUR line in an
+> *"Actions & Fonds"* account (it only accepts securities identified by an ISIN).
 
 ## Configuration & the `.env` ticker list
 

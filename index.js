@@ -109,6 +109,8 @@ const calculateAveragePrices = (transactions) => {
 	let totalSold = 0;
 	let totalDividends = 0;
 	let totalFees = 0;
+	let totalEtfBuys = 0;      // cash spent buying ETFs
+	let totalSellProceeds = 0; // cash returned from selling ETFs (robot rebalancing)
 
 	for (const transaction of transactions) {
 		const { ticker, type } = transaction;
@@ -145,6 +147,7 @@ const calculateAveragePrices = (transactions) => {
 		if (type === 'BUY') {
 			tickerStats[ticker].boughtQuantity += transaction.quantity;
 			tickerStats[ticker].totalBoughtAmount += transaction.totalAmount;
+			totalEtfBuys += transaction.totalAmount;
 		}
 
 		if (type === 'SELL') {
@@ -152,6 +155,7 @@ const calculateAveragePrices = (transactions) => {
 			const avgPrice = tickerStats[ticker].totalBoughtAmount / tickerStats[ticker].boughtQuantity;
 			tickerStats[ticker].boughtQuantity -= transaction.quantity;
 			tickerStats[ticker].totalBoughtAmount -= transaction.quantity * avgPrice;
+			totalSellProceeds += transaction.totalAmount;
 		}
 	}
 
@@ -176,7 +180,12 @@ const calculateAveragePrices = (transactions) => {
 		}
 	}
 
-	return { positions: result, soldOut, totalInjected, totalSold, totalDividends, totalFees };
+	// Uninvested EUR cash still sitting in the Robo-Advisor envelope.
+	// Exact cash ledger (each totalAmount is a real EUR movement, market-independent):
+	//   cash = top-ups + dividends + sell proceeds − ETF buys − fees − withdrawals
+	const cashBalance = totalInjected + totalDividends + totalSellProceeds - totalEtfBuys - totalFees - totalSold;
+
+	return { positions: result, soldOut, totalInjected, totalSold, totalDividends, totalFees, cashBalance };
 };
 
 const main = () => {
@@ -203,7 +212,7 @@ const main = () => {
 
 	try {
 		const transactions = parseCSV(csvPath);
-		const { positions, soldOut, totalInjected, totalSold, totalDividends, totalFees } = calculateAveragePrices(transactions);
+		const { positions, soldOut, totalInjected, totalSold, totalDividends, totalFees, cashBalance } = calculateAveragePrices(transactions);
 
 		// Check that all tickers have a corresponding ISIN
 		const missingTickers = [...Object.keys(positions), ...soldOut].filter(ticker => !tickerToIsin[ticker]);
@@ -231,7 +240,8 @@ const main = () => {
 					totalSold: Number(totalSold.toFixed(2)),
 					netContributions: Number(netContributions.toFixed(2)),
 					totalDividends: Number(totalDividends.toFixed(2)),
-					totalFees: Number(totalFees.toFixed(2))
+					totalFees: Number(totalFees.toFixed(2)),
+					cashBalance: Number(cashBalance.toFixed(2))
 				}
 			};
 			console.log(JSON.stringify(output, null, 2));
@@ -265,6 +275,7 @@ const main = () => {
 		console.log(`Net contributions:   ${netContributions.toFixed(2)} EUR`);
 		console.log(`Total dividends:     ${totalDividends.toFixed(2)} EUR`);
 		console.log(`Total fees:          ${totalFees.toFixed(2)} EUR`);
+		console.log(`Cash value:          ${cashBalance.toFixed(2)} EUR`);
 
 	} catch (error) {
 		console.error('Error during processing:', error.message);
