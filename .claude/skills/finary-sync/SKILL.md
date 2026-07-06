@@ -54,41 +54,58 @@ If the command errors (e.g. missing `.env` mapping), STOP and surface the error.
 
 ## Step 2 — Open the Finary Robo-Advisor account
 
+> UI change (reconnaissance 2026-07): the account no longer opens as its own page.
+> It opens as a **modal dialog** overlaid on the portfolio; the page title stays
+> `Finary` (NOT `Robo-Advisor | Finary`). The dialog is `dialog "Robo-Advisor"` with
+> a tab bar: `Aperçu` (default/selected), `Positions`, `Transactions` (disabled),
+> `Analyse`, `Paramètres`. The default `Aperçu` tab shows a chart/overview — NOT the
+> holdings list. You must switch to the `Positions` tab (Step 3).
+
 1. `list_pages`; if needed `navigate_page` to `https://app.finary.com/v2` and verify login
    (see Prerequisites).
 2. Navigate to the Robo-Advisor account. Preferred robust path:
    - Go to `https://app.finary.com/v2/portfolio/investment-accounts` (nav link "Actions & Fonds").
-   - `take_snapshot`, click the account link whose name is **"Robo-Advisor"**.
-   - The page title becomes `Robo-Advisor | Finary`.
+   - `take_snapshot`, click the account link whose name is **"Robo-Advisor"** — this opens
+     the account dialog on the `Aperçu` tab.
    - As of last reconnaissance the account URL was
      `https://app.finary.com/v2/portfolio/investment-accounts/7dd4d8cf-1ed7-4efb-ac4d-16b241996ae1`.
-     You may navigate there directly as a shortcut, but if it 404s / is empty, fall back
-     to the click path above (the UUID can change).
+     Navigating there directly also opens the dialog (on `Aperçu`). Use it as a shortcut,
+     but if it 404s / is empty, fall back to the click path above (the UUID can change).
 
 ## Step 3 — Inventory the current Finary positions
 
-`take_snapshot` of the account page. The holdings table renders one row per position.
-Each row, in a11y order, looks like:
+1. In the `dialog "Robo-Advisor"`, `click` the `tab "Positions"`. The URL gains
+   `?tab=holdings` and the holdings table renders (a `searchbox "Rechercher"` and the
+   column-header buttons `Nom`, `Quantité`, `PRU`, `Prix de revient`, `Prix actuel`,
+   `Valeur`, `+/- value` appear, plus a `StaticText "<N> positions"`).
+2. `take_snapshot`. Each holding row, in a11y order, looks like:
 
 ```
-StaticText "<fund name>"
+image / StaticText "<fund name>"
 button "<ISIN>"            <- the ISIN is the button label; use it as the row key
-StaticText "<quantité>"
-StaticText "<prix revient unitaire> €"
+StaticText "<quantité>"            (comma decimals, rounded to 4 dp, e.g. "13,0674")
+StaticText "<PRU / prix revient unitaire> €"
+StaticText "<prix de revient total> €"
 StaticText "<prix actuel> €"
 StaticText "<valeur> €"
-generic (+/- value)
-button expandable haspopup="menu"   <- the row's "..." action menu (LAST element of the row)
+StaticText "<+/- value> €"
+image "+" | "-"
+StaticText "<pct>%"
+button "Actions" expandable haspopup="menu"   <- the row's action menu (LAST element of the row)
 ```
 
 Build `finaryRows`: a map from ISIN → `{ menuUid, name, quantityText, priceText }`.
-Match each row's ISIN button to the row's trailing `...` menu button (the
-`button expandable haspopup="menu"` that comes right after that row's data, before the
-next row's name). There is also ONE such menu button for the summary "Robo-Advisor"
-header row — ignore it (it has no ISIN button before it).
+The row action menu is now a **labelled `button "Actions"`** (previously an unlabelled
+`...` button). Match each row's ISIN button to the `button "Actions"` that comes right
+after that row's data, before the next row's name. There is NO extra summary-row menu
+button now — there is exactly one `button "Actions"` per holding.
+
+> The displayed quantity is rounded to 4 dp; the true stored value (more precise) is
+> only visible inside the `Modifier` dialog's spinbutton `valuetext`. Do not rely on the
+> rounded table value for an exact-match comparison — when in doubt, update (Step 5).
 
 > uids change on every snapshot. Always take a fresh snapshot right before acting on a
-> row, and re-derive the menu uid for the ISIN you're about to touch.
+> row, and re-derive the `Actions` menu uid for the ISIN you're about to touch.
 
 ## Step 4 — Build and print the plan
 
@@ -110,9 +127,11 @@ Plan:
 ## Step 5 — UPDATE existing positions
 
 For each ISIN in UPDATE:
-1. `take_snapshot`; find that ISIN's row and its `...` menu button uid.
-2. `click` the menu button → menu appears with menuitems `Modifier`, `Signaler un problème`, `Supprimer`.
-3. `click` `Modifier`. A dialog `Modifier` opens with:
+1. `take_snapshot`; find that ISIN's row and its `button "Actions"` uid.
+2. `click` the `Actions` button → `menu "Actions"` appears with menuitems `Modifier`,
+   `Signaler un problème`, `Supprimer`.
+3. `click` `Modifier`. A dialog `Modifier` opens with (Compte selector may briefly read
+   `Loading...` before resolving to the account):
    - `spinbutton "Quantité"`
    - `spinbutton "Prix d'achat unitaire"` (label `EUR` next to it)
    - `button "Valider"`
@@ -128,7 +147,7 @@ For each ISIN in UPDATE:
 ## Step 6 — DELETE sold-out positions
 
 For each ISIN in DELETE:
-1. `take_snapshot`; find the row's `...` menu button uid.
+1. `take_snapshot`; find the row's `button "Actions"` uid.
 2. `click` it → `click` the `Supprimer` menuitem.
 3. A confirmation dialog opens: `dialog "Supprimer <fund name>"` with `button "Annuler"`
    and `button "Supprimer"`.
@@ -146,9 +165,13 @@ For each ISIN in ADD:
    `"<fund name> <ISIN> - <CURRENCY> ETF"`. **Choose the result whose label contains `- EUR `.**
    - If several EUR results, pick the first EUR one and note the ambiguity in the report.
    - If NO EUR result exists, skip this ISIN and flag it for manual handling.
-4. `click` the chosen EUR result. A form opens (`Ajouter actions et fonds`) with:
-   - `Nom` (disabled, prefilled)
-   - `button "<Compte>"` — verify it reads **"Robo-Advisor"**; if not, click it and select Robo-Advisor.
+4. `click` the chosen EUR result. The form loads asynchronously (the first click may only
+   focus the result and the SPA then navigates) — after clicking, `take_snapshot` and wait
+   for the page title `Ajout d'actions & fonds | Finary`. The form (`StaticText
+   "Ajouter actions et fonds"`) has:
+   - `textbox "Nom"` (disabled, prefilled)
+   - `button "<Compte>"` — as of last recon this **already defaults to "Robo-Advisor"**;
+     still verify it, and if not, click it and select Robo-Advisor.
    - `spinbutton "Quantité"`, `spinbutton "Prix d'achat"` (label `EUR`), `button "Valider"`.
 5. `fill` Quantité = `position.quantity`, Prix d'achat = `position.avgPrice` (dot decimals).
 6. `click` `Valider`. Wait for completion, then return to the Robo-Advisor account page for the next one.
