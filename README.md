@@ -22,12 +22,12 @@ Drop your Revolut **CSV** (transaction history) and **PDF** (account statement) 
 
 2. **`/finary-sync`** — runs the calculator and compares it with your Finary Robo-Advisor
    account, read through the **Finary MCP**. If nothing differs, it tells you Finary is up
-   to date and stops. Otherwise it opens Finary in your browser (Chrome DevTools MCP) and
+   to date and stops. Otherwise it opens Finary in your browser (Claude in Chrome extension) and
    fixes only the differing lines: **updates** quantities/prices, **deletes** fully-sold
    lines, and **adds** any missing line (searching by ISIN and picking the EUR listing).
 
 **Prerequisites for `finary-sync`:** the Finary MCP connected; for the write phase, be
-logged into Finary in the browser the Chrome DevTools MCP controls.
+logged into Finary in the browser the Claude in Chrome extension controls.
 
 ---
 

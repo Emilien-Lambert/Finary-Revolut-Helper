@@ -97,3 +97,8 @@ Otherwise surface the tickers it lists (they match the step-5 missing list).
 - The CSV `Ticker` column uses the same short symbols as the PDF (e.g. `LYMS`, `WELK`).
 - `EUR` / cash rows are not securities — never add a `TICKER_EUR`.
 - This skill only edits `.env` and `.env.example`. To push positions into Finary afterwards, use `finary-sync`.
+
+## Keeping this skill current
+If the Revolut documents no longer match this file (table title, columns, file names,
+CSV headers), adapt to what is actually there, then at the end of the run edit this
+file to describe the current format, commit, and tell the user what was corrected.

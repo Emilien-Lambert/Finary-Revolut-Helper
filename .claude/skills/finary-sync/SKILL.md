@@ -1,13 +1,13 @@
 ---
 name: finary-sync
-description: Use when the user wants to check whether Finary is up to date with their Revolut documents, or push their Revolut Robo-Advisor positions into Finary — runs the local calculator, compares it with the Finary account read through the Finary MCP, stops if nothing differs, otherwise drives the already-open Chrome (via Chrome DevTools MCP) to update, delete, and add only the differing positions.
+description: Use when the user wants to check whether Finary is up to date with their Revolut documents, or push their Revolut Robo-Advisor positions into Finary — runs the local calculator, compares it with the Finary account read through the Finary MCP, stops if nothing differs, otherwise drives the user's logged-in browser to update, delete, and add only the differing positions.
 ---
 
 # finary-sync
 
 Synchronise the Revolut Robo-Advisor positions computed by this repo's `index.js`
-into the Finary **Robo-Advisor** investment account, by driving the user's
-already-logged-in Chrome through the Chrome DevTools MCP.
+into the Finary **Robo-Advisor** investment account: read Finary through the Finary
+MCP, then fix the differing lines by driving the user's logged-in browser.
 
 ## What this does
 
@@ -19,29 +19,31 @@ already-logged-in Chrome through the Chrome DevTools MCP.
    - **Delete** positions in Finary whose ISIN is in `soldOut`.
    - **Add** JSON positions whose ISIN is missing from Finary.
 5. Re-read Finary through the MCP and print a final report.
+6. If the Finary UI no longer matched this file, update this file (see last section).
 
 If the user only asks "is Finary up to date?", stop after step 3 and report the diff.
 
-The user has opted into **full auto**: do not ask for confirmation between actions.
-Still print the plan (Step 3) before mutating, as a trace.
+Print the plan (Step 3) before mutating. Finary edits are real and irreversible
+(deletes lose the position's history): get the user's go-ahead on the printed plan
+once, then run all its writes without asking again between actions.
 
 ## Prerequisites (check first, stop if unmet)
 
 - The Finary MCP is connected (`mcp__finary__accounts` / `mcp__finary__holdings`).
 - Write phase only (Steps 4-8):
-  - The Chrome DevTools MCP is connected. `list_pages` must succeed.
-  - The user is **logged into Finary** in that browser. Navigate to
-    `https://app.finary.com/v2` and confirm the page title is `Dashboard | Finary`
-    (not `Log in | Finary`). If it shows the login page, STOP and ask the user to log in.
-- Permission note: Finary edits are real, irreversible portfolio writes. Claude Code's
-  auto-mode classifier may block `click` / `fill` on the edit dialogs. If a write is
-  denied, tell the user and let them approve — do not try to bypass the denial.
+  - A browser tool is available: the **Claude in Chrome** extension (`mcp__claude-in-chrome__*`,
+    the user's Brave) is the usual one. If several browsers are connected, never pick
+    one yourself: let the user choose (`switch_browser`). A Chrome DevTools MCP works too,
+    with the same steps.
+  - The user is **logged into Finary** in that browser. If any Finary URL redirects to
+    `/v2/login` (tab title `Se connecter | Finary`), STOP and ask the user to log in:
+    never type their credentials.
 
 ## Numeric format (important)
 
-Finary's quantity / price fields are spinbuttons. **Fill them with a `.` decimal
-separator** (e.g. `13.0674215`, `86.31`) — NOT a comma. The displayed value will
-render with a comma, that's expected.
+Quantity / price fields are number inputs. **Type values with a `.` decimal separator**
+(e.g. `13.0674215`, `86.31`), NOT a comma. Prefilled values display with a comma, that's
+expected. To replace a prefilled value: click the field, select all (`cmd+a`), then type.
 
 ## Step 1 — Compute the target state
 
@@ -95,105 +97,69 @@ Plan:
 
 **If all three lists are empty: report "Finary est à jour" and STOP.**
 
-## Step 4 — Open the Finary Robo-Advisor account
+## Step 4 — Open the Robo-Advisor positions
 
-> UI change (reconnaissance 2026-07): the account no longer opens as its own page.
-> It opens as a **modal dialog** overlaid on the portfolio; the page title stays
-> `Finary` (NOT `Robo-Advisor | Finary`). The dialog is `dialog "Robo-Advisor"` with
-> a tab bar: `Aperçu` (default/selected), `Positions`, `Transactions` (disabled),
-> `Analyse`, `Paramètres`. The default `Aperçu` tab shows a chart/overview — NOT the
-> holdings list. You must switch to the `Positions` tab (Step 5).
+> UI as observed on 2026-10-10.
 
-1. `list_pages`; if needed `navigate_page` to `https://app.finary.com/v2` and verify login
-   (see Prerequisites).
-2. Navigate to the Robo-Advisor account. Preferred robust path:
-   - Go to `https://app.finary.com/v2/portfolio/investment-accounts` (nav link "Actions & Fonds").
-   - `take_snapshot`, click the account link whose name is **"Robo-Advisor"** — this opens
-     the account dialog on the `Aperçu` tab.
-   - As of last reconnaissance the account URL was
-     `https://app.finary.com/v2/portfolio/investment-accounts/7dd4d8cf-1ed7-4efb-ac4d-16b241996ae1`.
-     Navigating there directly also opens the dialog (on `Aperçu`). Use it as a shortcut,
-     but if it 404s / is empty, fall back to the click path above (the UUID can change).
+Navigate to
+`https://app.finary.com/v2/portfolio/holdings-account/<accountId>?tab=holdings`
+(`accountId` from Step 2). This opens the `dialog "Robo-Advisor"` directly on its
+`Positions` tab (tabs: `Aperçu`, `Positions`, `Transactions` (disabled), `Analyse`,
+`Paramètres`). The tab title stays `Finary`.
 
-## Step 5 — Locate the rows to edit
+The positions table has a `Rechercher` search box, an `+ Ajouter une position` button,
+column headers `Nom`, `Quantité`, `PRU`, `Prix de revient`, `Prix actuel`, `Valeur`,
+`+/- value`, a `Total <N> positions` row, then one row per holding: fund name, ISIN
+under it, the values, and a `…` button (`button "Actions"`) at the far right.
 
-1. In the `dialog "Robo-Advisor"`, `click` the `tab "Positions"`. The URL gains
-   `?tab=holdings` and the holdings table renders (a `searchbox "Rechercher"` and the
-   column-header buttons `Nom`, `Quantité`, `PRU`, `Prix de revient`, `Prix actuel`,
-   `Valeur`, `+/- value` appear, plus a `StaticText "<N> positions"`).
-2. `take_snapshot`. Each holding row, in a11y order, looks like:
+## Step 5 — Target one row: filter by ISIN
 
-```
-image / StaticText "<fund name>"
-button "<ISIN>"            <- the ISIN is the button label; use it as the row key
-StaticText "<quantité>"            (comma decimals, rounded to 4 dp, e.g. "13,0674")
-StaticText "<PRU / prix revient unitaire> €"
-StaticText "<prix de revient total> €"
-StaticText "<prix actuel> €"
-StaticText "<valeur> €"
-StaticText "<+/- value> €"
-image "+" | "-"
-StaticText "<pct>%"
-button "Actions" expandable haspopup="menu"   <- the row's action menu (LAST element of the row)
-```
+Before each UPDATE or DELETE, type the ISIN in the `Rechercher` box (select all first
+to replace the previous one). The table then shows `Total 1 position` and that single
+row: no risk of acting on the wrong line, and the row stays at the same place.
+Check the row's fund name / ISIN before acting. Then click its `…` (`Actions`) button:
+a menu opens with `Modifier`, `Signaler un problème`, `Supprimer`.
 
-The values come from Step 2; here you only need, for each ISIN to UPDATE or DELETE,
-its row's `button "Actions"` uid.
-The row action menu is now a **labelled `button "Actions"`** (previously an unlabelled
-`...` button). Match each row's ISIN button to the `button "Actions"` that comes right
-after that row's data, before the next row's name. There is NO extra summary-row menu
-button now — there is exactly one `button "Actions"` per holding.
-
-> uids change on every snapshot. Always take a fresh snapshot right before acting on a
-> row, and re-derive the `Actions` menu uid for the ISIN you're about to touch.
+Positions and uids/refs move after each change: never reuse coordinates or refs
+across rows without re-checking the screen.
 
 ## Step 6 — UPDATE differing positions
 
 For each ISIN in UPDATE:
-1. `take_snapshot`; find that ISIN's row and its `button "Actions"` uid.
-2. `click` the `Actions` button → `menu "Actions"` appears with menuitems `Modifier`,
-   `Signaler un problème`, `Supprimer`.
-3. `click` `Modifier`. A dialog `Modifier` opens with (Compte selector may briefly read
-   `Loading...` before resolving to the account):
-   - `spinbutton "Quantité"`
-   - `spinbutton "Prix d'achat unitaire"` (label `EUR` next to it)
-   - `button "Valider"`
-4. `fill` the Quantité spinbutton with `position.quantity` (dot decimal).
-5. `fill` the Prix d'achat unitaire spinbutton with `position.avgPrice` (dot decimal).
-6. `click` `Valider`. Wait for the dialog to close (`wait_for` the row to reappear, or snapshot).
-7. If a write is denied by the permission classifier, record it and move on; report at the end.
+1. Filter and open the menu (Step 5), click `Modifier`.
+2. A dialog `Modifier` opens: `Nom` (disabled, the fund name), `Compte` (`Robo-Advisor`),
+   `Quantité`, `Prix d'achat unitaire` (`EUR`), `Valider`.
+3. Replace `Quantité` with `position.quantity` and `Prix d'achat unitaire` with
+   `position.avgPrice` (dot decimals).
+4. **Check the dialog** (screenshot/zoom): right fund name, both values exact.
+5. Click `Valider`. Success toast: `Les modifications ont été enregistrées`.
+6. If a write is refused (permission prompt denied, error toast), record it and move on.
 
 ## Step 7 — DELETE sold-out positions
 
 For each ISIN in DELETE:
-1. `take_snapshot`; find the row's `button "Actions"` uid.
-2. `click` it → `click` the `Supprimer` menuitem.
-3. A confirmation dialog opens: `dialog "Supprimer <fund name>"` with `button "Annuler"`
-   and `button "Supprimer"`.
-4. `click` the dialog's `Supprimer` button (the confirm — the one inside the dialog, not the menuitem).
-5. Wait for the row to disappear (`take_snapshot` and verify the ISIN is gone).
+1. Filter and open the menu (Step 5), click `Supprimer` (red).
+2. A confirmation `dialog "Supprimer <fund name>"` opens with `Annuler` / `Supprimer`.
+   Check the fund name, then click the dialog's `Supprimer`.
+3. Success toast: `L'actif a été supprimé`.
 
 ## Step 8 — ADD missing positions
 
 For each ISIN in ADD:
-1. Click the top-bar `Compléter mon patrimoine` button (or `navigate_page` to
-   `https://app.finary.com/v2/add-assets`).
-2. `take_snapshot`; `fill` the search textbox (placeholder `BoursoBank, Immobilier, Bitcoin...`)
-   with the ISIN.
-3. `take_snapshot`. Results render as buttons labelled like
-   `"<fund name> <ISIN> - <CURRENCY> ETF"`. **Choose the result whose label contains `- EUR `.**
-   - If several EUR results, pick the first EUR one and note the ambiguity in the report.
-   - If NO EUR result exists, skip this ISIN and flag it for manual handling.
-4. `click` the chosen EUR result. The form loads asynchronously (the first click may only
-   focus the result and the SPA then navigates) — after clicking, `take_snapshot` and wait
-   for the page title `Ajout d'actions & fonds | Finary`. The form (`StaticText
-   "Ajouter actions et fonds"`) has:
-   - `textbox "Nom"` (disabled, prefilled)
-   - `button "<Compte>"` — as of last recon this **already defaults to "Robo-Advisor"**;
-     still verify it, and if not, click it and select Robo-Advisor.
-   - `spinbutton "Quantité"`, `spinbutton "Prix d'achat"` (label `EUR`), `button "Valider"`.
-5. `fill` Quantité = `position.quantity`, Prix d'achat = `position.avgPrice` (dot decimals).
-6. `click` `Valider`. Wait for completion, then return to the Robo-Advisor account page for the next one.
+1. On the account's Positions tab, click `+ Ajouter une position`. It opens
+   `/v2/add-assets/investment-accounts/manually?holdingAccountId=<accountId>`
+   (title `Ajout d'actions & fonds | Finary`, heading `Ajouter actions et fonds`).
+2. Type the ISIN in the `Chercher actions ou fonds` box. Results show the fund name,
+   then `<SYMBOL> - <CURRENCY>` under it, and a type badge (`ETF`, `Action`).
+3. **Choose the result whose second line ends with `- EUR`.**
+   - Several EUR results: pick the first, note the ambiguity in the report.
+   - No EUR result: skip this ISIN and flag it for manual handling.
+   - The symbol often matches the Revolut ticker (e.g. `UBUD - EUR`), a useful cross-check.
+4. The form shows `Nom` (disabled), `Compte` (already `Robo-Advisor` thanks to the
+   `holdingAccountId`; verify it, fix it if not), `Quantité`, `Prix d'achat` (`EUR`),
+   `Valider`.
+5. Type `position.quantity` and `position.avgPrice` (dot decimals), check, click `Valider`.
+6. Success toast `Votre actif a été ajouté`; Finary returns to the account's Positions tab.
 
 ## Step 9 — Verify and report
 
@@ -201,15 +167,25 @@ Re-run Steps 2 and 3 (Finary MCP). The diff must now be empty; list any line sti
 differing as failed. Then print a summary:
 - Updated: N (list ISINs)
 - Deleted: N
-- Added: N
+- Added: N (with the search result chosen)
 - Skipped / failed: list with reason (e.g. permission denied, no EUR result, already absent)
 - Echo the `summary` totals from the JSON for the user's records.
 
+Close any browser tab you opened.
+
 ## Robustness notes
 
-- The Finary UI is a React SPA; uids are per-snapshot. Never reuse a uid across actions —
-  re-snapshot before each row operation.
-- Close any stray dialog/menu with the `Escape` key (`press_key`).
-- If `Compte` ever defaults to a different account, always correct it to "Robo-Advisor"
-  before validating an add.
+- Close any stray dialog/menu with `Escape`.
+- If `Compte` ever shows another account, correct it to "Robo-Advisor" before validating.
 - EUR cash / top-ups are NOT positions and never appear in `positions` — nothing to do for them.
+
+## Keeping this skill current
+
+Finary's UI changes regularly (the account page already moved from a standalone page
+to a dialog, then from `/investment-accounts/` to `/holdings-account/`). The UI described
+in Steps 4-8 is a guide, not ground truth: if the screen differs (URL, labels, button
+names, menu items, dialog fields, toasts, where a button is), adapt to what is actually
+on screen, then **at the end of the run, edit this file** so it describes the UI as
+observed, update the "UI as observed on" date, and commit the change. Same for any
+other part found outdated (MCP response shape, `index.js` output, file locations).
+Tell the user what was corrected.
