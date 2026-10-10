@@ -1,6 +1,6 @@
 ---
 name: finary-env-builder
-description: Use when the user wants to build or refresh the .env ticker→ISIN mappings from their Revolut PDF statement so that index.js has every TICKER_<SYMBOL>=<ISIN> couple it needs. Reads ONLY the PDF "EUR Portfolio breakdown" table, merges into .env (never overwrites), and reports any ticker still missing an ISIN.
+description: Use when the user wants to build or refresh the .env ticker→ISIN mappings from their Revolut PDF statement so that index.js has every TICKER_<SYMBOL>=<ISIN> couple it needs. Reads ONLY the PDF "EUR Portfolio breakdown" table, merges into .env and .env.example (never overwrites), and reports any ticker still missing an ISIN.
 ---
 
 # finary-env-builder
@@ -69,16 +69,23 @@ Read the CSV in `documents/` (the `*.csv`). Collect every distinct non-empty val
 `Ticker` column. For each, verify a `TICKER_<SYMBOL>` mapping now exists. Build a
 **missing list** of symbols present in the CSV but with no ISIN in the merged map.
 
-### 6. Write .env
+### 6. Write .env and .env.example
 Write the merged mapping back to `.env`, one `TICKER_<SYMBOL>=<ISIN>` per line, keeping the
-short header comment. Do not touch any other file.
+short header comment.
+
+Then apply the same additive merge to `.env.example` (versioned, it is the reference list
+of known tickers): append every `TICKER_*` line present in `.env` but missing from
+`.env.example`. Never delete or change an existing line there. Make sure the file ends
+with a newline before appending. Do not touch any other file.
 
 ### 7. Report
 - Added: new `TICKER_*` lines (symbol → ISIN, with fund name).
 - Unchanged: count.
 - Conflicts: any symbol whose PDF ISIN differs from the existing env ISIN (show both).
+- Added to `.env.example`: the lines appended there.
 - **Still missing (action needed):** CSV symbols with no ISIN anywhere — the user must add
   these by hand (from an older statement where the ticker was held) as `TICKER_<SYMBOL>=<ISIN>`.
+  When the user gives one, add it to **both** `.env` and `.env.example`.
 
 ## Verify
 Run `node index.js` (no flag). If it prints positions/summary without the
@@ -88,4 +95,4 @@ Otherwise surface the tickers it lists (they match the step-5 missing list).
 ## Notes
 - The CSV `Ticker` column uses the same short symbols as the PDF (e.g. `LYMS`, `WELK`).
 - `EUR` / cash rows are not securities — never add a `TICKER_EUR`.
-- This skill only edits `.env`. To push positions into Finary afterwards, use `finary-sync`.
+- This skill only edits `.env` and `.env.example`. To push positions into Finary afterwards, use `finary-sync`.

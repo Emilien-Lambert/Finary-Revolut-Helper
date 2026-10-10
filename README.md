@@ -16,7 +16,8 @@ Drop your Revolut **CSV** (transaction history) and **PDF** (account statement) 
 `documents/`, then run the two skills in order:
 
 1. **`/finary-env-builder`** — reads the PDF's *"EUR Portfolio breakdown"* table and merges
-   every `TICKER → ISIN` couple into `.env` (additive — it never erases existing tickers).
+   every `TICKER → ISIN` couple into `.env` and `.env.example` (additive — it never erases
+   existing tickers).
    It then tells you if any ticker from the CSV is still missing an ISIN.
 
 2. **`/finary-sync`** — runs the calculator and compares it with your Finary Robo-Advisor
