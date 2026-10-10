@@ -3,6 +3,9 @@
     "allow": [
       "Bash(node index.js)",
       "Bash(node index.js --json)",
+      "Bash(npm test)",
+      "mcp__finary__accounts",
+      "mcp__finary__holdings",
       "mcp__plugin_chrome-devtools-mcp_chrome-devtools"
     ]
   }

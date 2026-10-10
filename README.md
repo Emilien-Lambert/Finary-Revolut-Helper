@@ -19,13 +19,14 @@ Drop your Revolut **CSV** (transaction history) and **PDF** (account statement) 
    every `TICKER → ISIN` couple into `.env` (additive — it never erases existing tickers).
    It then tells you if any ticker from the CSV is still missing an ISIN.
 
-2. **`/finary-sync`** — runs the calculator, opens Finary in your browser (Chrome DevTools
-   MCP), goes to **Patrimoine → Actions & Fonds → Robo-Advisor**, and makes it match your
-   real positions: **updates** quantities/prices, **deletes** fully-sold lines, and **adds**
-   any missing line (searching by ISIN and picking the EUR listing).
+2. **`/finary-sync`** — runs the calculator and compares it with your Finary Robo-Advisor
+   account, read through the **Finary MCP**. If nothing differs, it tells you Finary is up
+   to date and stops. Otherwise it opens Finary in your browser (Chrome DevTools MCP) and
+   fixes only the differing lines: **updates** quantities/prices, **deletes** fully-sold
+   lines, and **adds** any missing line (searching by ISIN and picking the EUR listing).
 
-**Prerequisite for `finary-sync`:** be logged into Finary in the browser the Chrome
-DevTools MCP controls.
+**Prerequisites for `finary-sync`:** the Finary MCP connected; for the write phase, be
+logged into Finary in the browser the Chrome DevTools MCP controls.
 
 ---
 
@@ -58,6 +59,8 @@ npm install
 ```bash
 npm start
 ```
+
+To read the CSV from another folder: `DOCUMENTS_DIR=/abs/path node index.js`.
 
 It prints, for each asset, the ISIN, total quantity and average purchase price (EUR),
 plus the fully-sold positions and a summary — ready to type into Finary by hand:
