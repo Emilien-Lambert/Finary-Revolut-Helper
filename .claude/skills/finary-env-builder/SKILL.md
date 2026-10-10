@@ -10,8 +10,8 @@ Populate / refresh the repo's `.env` ticker→ISIN mapping by reading the Revolu
 
 ## Two rules that define this skill
 
-1. **Only the "EUR Portfolio breakdown" table matters.** That single table (page 2 of the
-   statement) is the *only* place an ISIN is given. The transaction pages and the USD
+1. **Only the "EUR Portfolio breakdown" table matters.** That single table (in the first
+   pages of the statement, its page number varies) is the *only* place an ISIN is given. The transaction pages and the USD
    tables carry NO usable ISIN — ignore them. You do **not** need to read the whole PDF.
 
 2. **Merge, never overwrite.** The breakdown lists ISINs *only for the positions held at
@@ -23,13 +23,14 @@ Populate / refresh the repo's `.env` ticker→ISIN mapping by reading the Revolu
 ## Steps
 
 ### 1. Read the breakdown table (efficiently — not the whole PDF)
-Find the current statement PDF in `documents/*.pdf`. The "EUR Portfolio breakdown" is on
-**page 2**. Read just that page:
+Find the current statement PDF in `documents/*.pdf`. Locate the table by its title
+`EUR Portfolio breakdown`, never by page number: it moves between statements (page 2 in
+older ones, page 3 since the USD tables and a glossary were added before it).
 
-- Use the Read tool with `pages="2"` to get only that page (cheap). If that errors because
-  page-image rendering tooling (poppler/pdftoppm) is missing, fall back to reading the PDF
-  **without** the `pages` parameter (text extraction of the whole file) — but still only
-  look at the `EUR Portfolio breakdown` section; ignore everything else.
+- Use the Read tool with `pages="1-4"` (cheap) and find the `EUR Portfolio breakdown`
+  title. If that errors because page-image rendering tooling (poppler/pdftoppm) is
+  missing, fall back to reading the PDF **without** the `pages` parameter (text extraction
+  of the whole file). Either way, only look at that section; ignore everything else.
 
 Do NOT process `documents/` history or `old-documents/` — the existing `.env` already
 holds the accumulated history. One current PDF is enough.
